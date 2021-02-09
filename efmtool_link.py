@@ -1,4 +1,3 @@
-#%%
 import numpy
 import tempfile
 import jpype
@@ -7,6 +6,7 @@ import scipy
 import os
 import subprocess
 
+# have to set up the path to efmtool manually here
 efmtool_jar = r'E:\gwdg_owncloud\20160114_regEfmtool_3.3\regEfmtool_ori.jar'
 #jpype.addClassPath(r'E:\gwdg_owncloud\efmtool-samples.jar') # merged into metabolic-efm-all.jar
 #jpype.addClassPath(r'E:\gwdg_owncloud\CNAgit\CellNetAnalyzer\code\ext\efmtool\lib\metabolic-efm-all.jar')
@@ -23,16 +23,16 @@ import java.math.BigInteger;
 jTrue = jpype.JBoolean(True)
 jSystem = jpype.JClass("java.lang.System")
 
-#%%
 def null_rat_efmtool(npmat, tolerance=0):
     gauss_rat = Gauss.getRationalInstance()
     jmat = numpy_mat2jBigIntegerRationalMatrix(npmat, tolerance=tolerance)
     kn = gauss_rat.nullspace(jmat)
     return jpypeArrayOfArrays2numpy_mat(kn.getDoubleRows())
 
-#%%
 # subset_compression = CompressionMethod[:]([CompressionMethod.CoupledZero, CompressionMethod.CoupledCombine, CompressionMethod.CoupledContradicting])
 def compress_rat_efmtool(st, reversible, compression_method=CompressionMethod.STANDARD, remove_cr=False, tolerance=0):
+# add keep_separate option?
+# expose suppressedReactions option of StoichMatrixCompressor?
     num_met = st.shape[0]
     num_reac = st.shape[1]
     st = numpy_mat2jBigIntegerRationalMatrix(st, tolerance=tolerance)
@@ -47,7 +47,6 @@ def compress_rat_efmtool(st, reversible, compression_method=CompressionMethod.ST
 
     return rd, subT, comprec
     
-#%%
 def basic_columns_rat(mx, tolerance=0): # mx is ch.javasoft.smx.impl.DefaultBigIntegerRationalMatrix
     if type(mx) is numpy.ndarray:
         mx = numpy_mat2jBigIntegerRationalMatrix(mx, tolerance=tolerance)
@@ -57,7 +56,6 @@ def basic_columns_rat(mx, tolerance=0): # mx is ch.javasoft.smx.impl.DefaultBigI
 
     return col_map[0:rank]
 
-#%%
 def numpy_mat2jpypeArrayOfArrays(npmat):
     rows = npmat.shape[0]
     cols = npmat.shape[1]
@@ -84,19 +82,6 @@ def numpy_mat2jBigIntegerRationalMatrix(npmat, tolerance=0):
         jmat= DefaultBigIntegerRationalMatrix(numpy_mat2jpypeArrayOfArrays(npmat), jTrue, jTrue)
     return jmat
 
-# %%
-import cobra
-import cobra.util.array
-#model = cobra.io.read_sbml_model(r"..\cnapy\projects\ECC2comp\ECC2comp.xml")
-model = cobra.io.read_sbml_model(r"metatool_example_no_ext.xml")
-#model = cobra.io.read_sbml_model(r"..\cnapy\projects\iJO1366\iJO1366.xml")
-rev = [r.reversibility for r in model.reactions]
-stdf = cobra.util.array.create_stoichiometric_matrix(model, array_type='DataFrame')
-#%%
-kn = null_rat_efmtool(stdf.values)
-numpy.max(numpy.abs(stdf.values.dot(kn)))
-
-# %%
 def write_efmtool_input(st, reversible, reaction_names, metabolite_names):
     numpy.savetxt(r"stoich.txt", st)
     with open('revs.txt', 'w') as file:
@@ -106,31 +91,6 @@ def write_efmtool_input(st, reversible, reaction_names, metabolite_names):
     with open('rnames.txt', 'w') as file:
         file.write(' '.join('"' + x + '"' for x in reaction_names))
 
-# %%
-write_efmtool_input(stdf.values, numpy.array(rev, dtype=int), stdf.columns, stdf.index)
-
-#%% efmtool via Java 
-import time
-java_executable = os.path.join(str(jSystem.getProperty("java.home")), "bin", "java")
-#java_executable = r"C:\Program Files\AdoptOpenJDK\jdk-11.0.8.10-hotspot\bin\java"
-cp = subprocess.Popen([java_executable,
-"-cp", efmtool_jar, "ch.javasoft.metabolic.efm.main.CalculateFluxModes",
- '-kind', 'stoichiometry', '-arithmetic', 'double', '-zero', '1e-10',
- '-compression', 'default', '-log', 'file', 'log.txt', '-level', 'INFO',
- '-maxthreads', '-1', '-normalize', 'min', '-adjacency-method', 'pattern-tree-minzero', 
- '-rowordering', 'MostZerosOrAbsLexMin', '-tmpdir', '.', '-stoich', 'stoich.txt', '-rev', 
- 'revs.txt', '-meta', 'mnames.txt', '-reac', 'rnames.txt', '-out', 'matlab', 'efms.mat'])#,
-
-with open("log.txt") as log_file:
-    print(log_file.readlines())
-    while cp.poll() is None:
-        ln= log_file.readlines()
-        if len(ln) > 0: # prevent printing lots of empty lines
-            print(ln)
-        else:
-            time.sleep(0.1)
-
-# %%
 def read_efms_from_mat(folder : str) -> numpy.array:
     # taken from https://gitlab.com/csb.ethz/efmtool/
     # efmtool stores the computed EFMs in one or more .mat files. This function
@@ -143,7 +103,6 @@ def read_efms_from_mat(folder : str) -> numpy.array:
 
     return numpy.concatenate(efm_parts, axis=1)
 
-# %%
 def calculate_flux_modes(st : numpy.array, reversible, reaction_names=None, metabolite_names=None, java_executable=None):
     if java_executable is None:
         java_executable = os.path.join(str(jSystem.getProperty("java.home")), "bin", "java")
@@ -165,11 +124,12 @@ def calculate_flux_modes(st : numpy.array, reversible, reaction_names=None, meta
         '-maxthreads', '-1', '-normalize', 'min', '-adjacency-method', 'pattern-tree-minzero', 
         '-rowordering', 'MostZerosOrAbsLexMin', '-tmpdir', '.', '-stoich', 'stoich.txt', '-rev', 
         'revs.txt', '-meta', 'mnames.txt', '-reac', 'rnames.txt', '-out', 'matlab', 'efms.mat'],
-        stdout = subprocess.PIPE, stderr = subprocess.PIPE, universal_newlines=True) #, bufsize=1
+        stdout = subprocess.PIPE, stderr = subprocess.PIPE, universal_newlines=True)
+        # might there be a danger of deadlock in case an error produces a large text output that blocks the pipe?
         while cp.poll() is None:
             ln = cp.stdout.readlines(1) # blocks until one line has been read
             if len(ln) > 0: # suppress empty lines that can occur in case of external termination
-                print(ln[0])
+                print(ln[0], end='')
         print(cp.stderr.readlines())
         os.chdir(curr_dir)
         if cp.poll() is 0:
@@ -179,8 +139,3 @@ def calculate_flux_modes(st : numpy.array, reversible, reaction_names=None, meta
             efms = None
 
     return efms
-
-# %%
-efms = calculate_flux_modes(stdf.values, numpy.array(rev, dtype=int))
-print(efms.shape)
-# %%
