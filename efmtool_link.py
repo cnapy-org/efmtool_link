@@ -29,7 +29,7 @@ def null_rat_efmtool(npmat, tolerance=0):
     kn = gauss_rat.nullspace(jmat)
     return jpypeArrayOfArrays2numpy_mat(kn.getDoubleRows())
 
-# subset_compression = CompressionMethod[:]([CompressionMethod.CoupledZero, CompressionMethod.CoupledCombine, CompressionMethod.CoupledContradicting])
+subset_compression = CompressionMethod[:]([CompressionMethod.CoupledZero, CompressionMethod.CoupledCombine, CompressionMethod.CoupledContradicting])
 def compress_rat_efmtool(st, reversible, compression_method=CompressionMethod.STANDARD, remove_cr=False, tolerance=0):
 # add keep_separate option?
 # expose suppressedReactions option of StoichMatrixCompressor?
@@ -81,6 +81,12 @@ def numpy_mat2jBigIntegerRationalMatrix(npmat, tolerance=0):
     else:
         jmat= DefaultBigIntegerRationalMatrix(numpy_mat2jpypeArrayOfArrays(npmat), jTrue, jTrue)
     return jmat
+
+# would something like jBigIntegerRationalMatrix2sympy useful?
+# does cobra suppor rationals as stoichiometric coefficients?
+# import java.math.BigInteger as BigInteger
+# x=BigInteger("10000000000000000000000")
+# x.bitLength()
 
 def write_efmtool_input(st, reversible, reaction_names, metabolite_names):
     numpy.savetxt(r"stoich.txt", st)
