@@ -19,8 +19,9 @@ numpy.max(numpy.abs(stdf.values.dot(kn)))
 import time
 import os
 import subprocess
+import efmtool_extern
 
-efmtool_link.write_efmtool_input(stdf.values, numpy.array(rev, dtype=int), stdf.columns, stdf.index)
+efmtool_extern.write_efmtool_input(stdf.values, numpy.array(rev, dtype=int), stdf.columns, stdf.index)
 java_executable = os.path.join(str(efmtool_link.jSystem.getProperty("java.home")), "bin", "java")
 #java_executable = r"C:\Program Files\AdoptOpenJDK\jdk-11.0.8.10-hotspot\bin\java"
 cp = subprocess.Popen([java_executable,
@@ -43,8 +44,9 @@ with open("log.txt") as log_file:
             time.sleep(0.1)
 
 # %%
-efms = efmtool_link.calculate_flux_modes(stdf.values, numpy.array(rev, dtype=int))
-print(efms.shape)
+import efmtool_extern
+import numpy
+efms = efmtool_extern.calculate_flux_modes(stdf.values, numpy.array(rev, dtype=int))
 
 # %% test
 def test2(n, a, m=0, dec=None, tol=0):
