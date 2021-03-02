@@ -56,6 +56,7 @@ def numpy_mat2jpypeArrayOfArrays(npmat):
     rows = npmat.shape[0]
     cols = npmat.shape[1]
     jmat= jpype.JDouble[rows, cols]
+    # for sparse matrices can use nonzero() here instead of iterating through everything
     for r in range(rows):
         for c in range(cols):
             jmat[r][c]= npmat[r, c]
@@ -77,9 +78,3 @@ def numpy_mat2jBigIntegerRationalMatrix(npmat, tolerance=0):
     else:
         jmat= DefaultBigIntegerRationalMatrix(numpy_mat2jpypeArrayOfArrays(npmat), jTrue, jTrue)
     return jmat
-
-# would something like jBigIntegerRationalMatrix2sympy useful?
-# does cobra suppor rationals as stoichiometric coefficients?
-# import java.math.BigInteger as BigInteger
-# x=BigInteger("10000000000000000000000")
-# x.bitLength()
