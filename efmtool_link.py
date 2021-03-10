@@ -26,7 +26,7 @@ def null_rat_efmtool(npmat, tolerance=0):
     return jpypeArrayOfArrays2numpy_mat(kn.getDoubleRows())
 
 subset_compression = CompressionMethod[:]([CompressionMethod.CoupledZero, CompressionMethod.CoupledCombine, CompressionMethod.CoupledContradicting])
-def compress_rat_efmtool(st, reversible, compression_method=CompressionMethod.STANDARD, remove_cr=False, tolerance=0):
+def compress_rat_efmtool(st, reversible, compression_method=CompressionMethod.STANDARD, remove_cr=False, tolerance=0, remove_rxns=[]):
 # add keep_separate option?
 # expose suppressedReactions option of StoichMatrixCompressor?
     num_met = st.shape[0]
@@ -34,7 +34,14 @@ def compress_rat_efmtool(st, reversible, compression_method=CompressionMethod.ST
     st = numpy_mat2jBigIntegerRationalMatrix(st, tolerance=tolerance)
     reversible = jpype.JBoolean[:](reversible)
     smc = StoichMatrixCompressor(compression_method)
-    comprec = smc.compress(st, reversible, jpype.JString[num_met], jpype.JString[num_reac], None)
+    if remove_rxns == []:
+        reacNames = jpype.JString[num_reac]
+        remove_rxns = None
+    else:
+        reacNames = numpy.array(['R'+str(i) for i in range(num_reac)]) # set up dummy names
+        remove_rxns = java.util.HashSet(reacNames[remove_rxns].tolist()) # works because of some jpype magic
+        reacNames = jpype.JString[:](reacNames)
+    comprec = smc.compress(st, reversible, jpype.JString[num_met], reacNames, remove_rxns)
     rd = jpypeArrayOfArrays2numpy_mat(comprec.cmp.getDoubleRows())
     subT = jpypeArrayOfArrays2numpy_mat(comprec.post.getDoubleRows())
     if remove_cr:
@@ -73,6 +80,8 @@ def jpypeArrayOfArrays2numpy_mat(jmat):
 
 def numpy_mat2jBigIntegerRationalMatrix(npmat, tolerance=0):
     if tolerance > 0:
+        if type(npmat) is not numpy.ndarray: # in case it is a sparse matrix
+            npmat = npmat.toarray()
         jmat= DefaultBigIntegerRationalMatrix(jpype.JDouble[:](numpy.concatenate(npmat)),
                 npmat.shape[0], npmat.shape[1], tolerance)
     else:
