@@ -1,12 +1,28 @@
 import numpy
 import jpype
 import scipy
+import sys
 
-# have to set up the path to efmtool manually here
-efmtool_jar = r'E:\gwdg_owncloud\20160114_regEfmtool_3.3\regEfmtool_ori.jar'
-#jpype.addClassPath(r'E:\gwdg_owncloud\efmtool-samples.jar') # merged into metabolic-efm-all.jar
-#jpype.addClassPath(r'E:\gwdg_owncloud\CNAgit\CellNetAnalyzer\code\ext\efmtool\lib\metabolic-efm-all.jar')
-#jpype.addClassPath(r"E:\gwdg_owncloud\CNAgit\CellNetAnalyzer\code\ext\efmtool\lib")
+if 'cnapy' in sys.modules:
+    import configparser
+    import appdirs
+    import os
+    conf_path = os.path.join(appdirs.user_config_dir(
+        "cnapy", roaming=True, appauthor=False), "cnapy-config.txt")
+    configParser = configparser.RawConfigParser()
+    configParser.read(conf_path)
+    if configParser.has_option('cnapy-config', 'cna_path'):
+        efmtool_jar = os.path.join(configParser.get('cnapy-config', 'cna_path'),
+                                     'code', 'ext', 'efmtool', 'lib', 'metabolic-efm-all.jar')
+    else:
+       # have to set up the path to efmtool manually here
+        efmtool_jar = r'E:\gwdg_owncloud\20160114_regEfmtool_3.3\regEfmtool_ori.jar'
+else:
+    # have to set up the path to efmtool manually here
+    efmtool_jar = r'E:\gwdg_owncloud\20160114_regEfmtool_3.3\regEfmtool_ori.jar'
+    #jpype.addClassPath(r'E:\gwdg_owncloud\efmtool-samples.jar') # merged into metabolic-efm-all.jar
+    #jpype.addClassPath(r'E:\gwdg_owncloud\CNAgit\CellNetAnalyzer\code\ext\efmtool\lib\metabolic-efm-all.jar')
+    #jpype.addClassPath(r"E:\gwdg_owncloud\CNAgit\CellNetAnalyzer\code\ext\efmtool\lib")
 jpype.addClassPath(efmtool_jar)
 jpype.startJVM()
 

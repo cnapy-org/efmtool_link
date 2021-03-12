@@ -56,7 +56,7 @@ def compress_model(model, remove_rxns=[], tolerance=0.0):
     return compr_model, subT
 
 def remove_conservation_relations(model, return_reduced_only=False, tolerance=0):
-    stoich_mat = cobra.util.array.create_stoichiometric_matrix(model, array_type='dok')
+    stoich_mat = cobra.util.array.create_stoichiometric_matrix(model, array_type='lil')
     basic_metabolites = efmtool_link.basic_columns_rat(stoich_mat.transpose().toarray(), tolerance=tolerance)
     if return_reduced_only:
         reduced = stoich_mat[basic_metabolites, :]
@@ -70,17 +70,29 @@ def remove_conservation_relations(model, return_reduced_only=False, tolerance=0)
         return basic_metabolites
 
 def compress_model_sympy(model, remove_rxns=None, rational_conversion='base10'):
-    compr_model = model.copy()
+    # modifies the model that is passed as first parameter; if you want to preserve the original model copy it first
+    # removes reactions with bounds (0, 0)
+    # all irreversible reactions in the compressed model will flow in the forward direction
+    # does not remove the conservation relations, see remove_conservation_relations_sympy for this
+    if remove_rxns is None:
+        remove_rxns = []
     config = Configuration()
-    num_met = len(compr_model.metabolites)
-    num_reac = len(compr_model.reactions)
+    num_met = len(model.metabolites)
+    num_reac = len(model.reactions)
     stoich_mat = DefaultBigIntegerRationalMatrix(num_met, num_reac)
     # reversible = jpype.JBoolean[num_reac]
-    reversible = jpype.JBoolean[:]([r.reversibility for r in compr_model.reactions])
+    reversible = jpype.JBoolean[:]([r.reversibility for r in model.reactions])
     start_time = time.monotonic()
+    flipped = []
     for i in range(num_reac):
+        if model.reactions[i].bounds == (0, 0): # blocked reaction
+            remove_rxns.append(model.reactions[i].id)
+        elif model.reactions[i].upper_bound <= 0: # can run in backwards direction only
+            model.reactions[i] *= -1
+            flipped.append(i)
+            print("Flipped", model.reactions[i].id)
         # have to use _metabolites because metabolites gives only a copy
-        for k, v in compr_model.reactions[i]._metabolites.items():
+        for k, v in model.reactions[i]._metabolites.items():
             if type(v) is float or type(v) is int:
                 if type(v) is int or v.is_integer():
                     # v = int(v)
@@ -90,23 +102,27 @@ def compress_model_sympy(model, remove_rxns=None, rational_conversion='base10'):
                     v = sympy.nsimplify(v, rational=True, rational_conversion=rational_conversion)
                     # v = sympy.Rational(v)
                     # compr_model.reactions[i]._metabolites[k] = sympy.Rational(v) 
-                compr_model.reactions[i]._metabolites[k] = v # only changes coefficient in the model, not in the solver
+                model.reactions[i]._metabolites[k] = v # only changes coefficient in the model, not in the solver
             elif type(v) is not sympy.Rational:
                 raise TypeError
             n, d = sympyRat2jBigIntegerPair(v)
             # does not work although there is a public void setValueAt(int row, int col, BigInteger numerator, BigInteger denominator) method
             # leads to kernel crash directly or later
             # stoic_mat.setValueAt(compr_model.metabolites.index(k.id), i, n, d)
-            stoich_mat.setValueAt(compr_model.metabolites.index(k.id), i, BigFraction(n, d))
+            stoich_mat.setValueAt(model.metabolites.index(k.id), i, BigFraction(n, d))
             # reversible[i] = compr_model.reactions[i].reversibility # somehow makes problems with the smc.compress call
     
     smc = StoichMatrixCompressor(efmtool_link.subset_compression)
-    if remove_rxns is None:
+    if len(remove_rxns) == 0:
         reacNames = jpype.JString[num_reac]
+        remove_rxns = None
     else:
-        reacNames = jpype.JString[:](compr_model.reactions.list_attr('id'))
+        reacNames = jpype.JString[:](model.reactions.list_attr('id'))
         remove_rxns = java.util.HashSet(remove_rxns) # works because of some jpype magic
+        print("Removing", remove_rxns.size(), "reactions:")
+        print(remove_rxns.toString())
     comprec = smc.compress(stoich_mat, reversible, jpype.JString[num_met], reacNames, remove_rxns)
+    del remove_rxns
     print(time.monotonic() - start_time) # 20 seconds in iJO1366 without remove_rxns
     start_time = time.monotonic()
 
@@ -119,35 +135,36 @@ def compress_model_sympy(model, remove_rxns=None, rational_conversion='base10'):
         for i in range(len(rxn_idx)): # rescale all reactions in this subset
             # !! swaps lb, ub when the scaling factor is < 0, but does not change the magnitudes
             factor = jBigFraction2sympyRat(comprec.post.getBigFractionValueAt(rxn_idx[i], j))
-            compr_model.reactions[rxn_idx[i]] *=  factor #subset_matrix[rxn_idx[i], j]
+            model.reactions[rxn_idx[i]] *=  factor #subset_matrix[rxn_idx[i], j]
             # factor = abs(float(factor)) # context manager has trouble with non-float bounds
-            if compr_model.reactions[rxn_idx[i]].lower_bound not in (0, config.lower_bound, -float('inf')):
-                compr_model.reactions[rxn_idx[i]].lower_bound/= abs(subset_matrix[rxn_idx[i], j]) #factor
-            if compr_model.reactions[rxn_idx[i]].upper_bound not in (0, config.upper_bound, float('inf')):
-                compr_model.reactions[rxn_idx[i]].upper_bound/= abs(subset_matrix[rxn_idx[i], j]) #factor
-        compr_model.reactions[rxn_idx[0]].subset_rxns = rxn_idx # reaction indices of the base model
-        compr_model.reactions[rxn_idx[0]].subset_stoich = subset_matrix[rxn_idx, j] # use rationals here?
+            if model.reactions[rxn_idx[i]].lower_bound not in (0, config.lower_bound, -float('inf')):
+                model.reactions[rxn_idx[i]].lower_bound/= abs(subset_matrix[rxn_idx[i], j]) #factor
+            if model.reactions[rxn_idx[i]].upper_bound not in (0, config.upper_bound, float('inf')):
+                model.reactions[rxn_idx[i]].upper_bound/= abs(subset_matrix[rxn_idx[i], j]) #factor
+        model.reactions[rxn_idx[0]].subset_rxns = rxn_idx # reaction indices of the base model
+        model.reactions[rxn_idx[0]].subset_stoich = subset_matrix[rxn_idx, j] # use rationals here?
         for i in range(1, len(rxn_idx)): # merge reactions
             # !! keeps bounds of reactions[rxn_idx[0]]
-            compr_model.reactions[rxn_idx[0]] += compr_model.reactions[rxn_idx[i]]
+            model.reactions[rxn_idx[0]] += model.reactions[rxn_idx[i]]
             # the stoichiometries calculated here are less exact than those in rd from compress_rat_efmtool
             # therefore when calulating e.g. conservation relations of the compressed model a non-zero tolerance
             # may be needed to recover the conservation relations
-            if compr_model.reactions[rxn_idx[i]].lower_bound > compr_model.reactions[rxn_idx[0]].lower_bound:
-                compr_model.reactions[rxn_idx[0]].lower_bound = compr_model.reactions[rxn_idx[i]].lower_bound
-            if compr_model.reactions[rxn_idx[i]].upper_bound < compr_model.reactions[rxn_idx[0]].upper_bound:
-                compr_model.reactions[rxn_idx[0]].upper_bound = compr_model.reactions[rxn_idx[i]].upper_bound
+            if model.reactions[rxn_idx[i]].lower_bound > model.reactions[rxn_idx[0]].lower_bound:
+                model.reactions[rxn_idx[0]].lower_bound = model.reactions[rxn_idx[i]].lower_bound
+            if model.reactions[rxn_idx[i]].upper_bound < model.reactions[rxn_idx[0]].upper_bound:
+                model.reactions[rxn_idx[0]].upper_bound = model.reactions[rxn_idx[i]].upper_bound
             del_rxns[rxn_idx[i]] = True
     print(time.monotonic() - start_time) # 11 seconds in iJO1366
     del_rxns = numpy.where(del_rxns)[0]
     for i in range(len(del_rxns)-1, -1, -1): # delete in reversed index order to keep indices valid
-        compr_model.reactions[del_rxns[i]].remove_from_model(remove_orphans=True)
-    # does not remove the conservation relations
-    subT = numpy.zeros((len(model.reactions), len(compr_model.reactions)))
+        model.reactions[del_rxns[i]].remove_from_model(remove_orphans=True)
+    subT = numpy.zeros((num_reac, len(model.reactions)))
     for j in range(subT.shape[1]):
-        subT[compr_model.reactions[j].subset_rxns, j] = compr_model.reactions[j].subset_stoich
+        subT[model.reactions[j].subset_rxns, j] = model.reactions[j].subset_stoich
+    for i in flipped: # adapt so that it matches the reaction direction before flipping
+            subT[i, :] *= -1
     # adapt compressed_model name
-    return compr_model, subT
+    return subT
 
 def get_rxns_in_subsets(compr_model):
     # build subT from subset_rxns, subset_stoich (probably requires original number of reactions)
@@ -243,8 +260,14 @@ def jRatMat2sympyRatMat(jmat):
                 mat[r, c] = jBigIntegerPair2sympyRat(n, d)
     return mat
 
-def dokRatMat2dokFloatMat(mat):
-    fmat = scipy.sparse.dok_matrix((mat.shape[0], mat.shape[1]))
+# def dokRatMat2dokFloatMat(mat):
+#     fmat = scipy.sparse.dok_matrix((mat.shape[0], mat.shape[1]))
+#     for (r, c), v in mat.items():
+#         fmat[r, c] = float(v)
+#     return fmat
+
+def dokRatMat2lilFloatMat(mat):
+    fmat = scipy.sparse.lil_matrix((mat.shape[0], mat.shape[1]))
     for (r, c), v in mat.items():
         fmat[r, c] = float(v)
     return fmat
