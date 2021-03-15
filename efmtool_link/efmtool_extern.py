@@ -51,7 +51,8 @@ def calculate_flux_modes(st : numpy.array, reversible, reaction_names=None, meta
             '-compression', 'default', '-log', 'console', '-level', 'INFO',
             '-maxthreads', '-1', '-normalize', 'min', '-adjacency-method', 'pattern-tree-minzero', 
             '-rowordering', 'MostZerosOrAbsLexMin', '-tmpdir', '.', '-stoich', 'stoich.txt', '-rev', 
-            'revs.txt', '-meta', 'mnames.txt', '-reac', 'rnames.txt', '-out', 'matlab', 'efms.mat'],
+            'revs.txt', '-meta', 'mnames.txt', '-reac', 'rnames.txt', '-out', 'binary-doubles', 'efms.bin'],
+            # 'revs.txt', '-meta', 'mnames.txt', '-reac', 'rnames.txt', '-out', 'matlab', 'efms.mat'],
             stdout = subprocess.PIPE, stderr = subprocess.PIPE, universal_newlines=True)
             # might there be a danger of deadlock in case an error produces a large text output that blocks the pipe?
             while cp.poll() is None:
@@ -65,7 +66,8 @@ def calculate_flux_modes(st : numpy.array, reversible, reaction_names=None, meta
         
         os.chdir(curr_dir)
         if success:
-            efms = read_efms_from_mat(work_dir)
+            # efms = read_efms_from_mat(work_dir)
+            efms = read_efms_from_bin(os.path.join(work_dir, 'efms.bin'))
         else:
             print("Emftool failure")
             efms = None
@@ -81,6 +83,7 @@ def write_efmtool_input(st, reversible, reaction_names, metabolite_names):
     with open('rnames.txt', 'w') as file:
         file.write(' '.join('"' + x + '"' for x in reaction_names))
 
+# loading can sometimes fail because of unclear string encoding used by MatFileWriter (e.g. when there is an 'ä' in the string)
 def read_efms_from_mat(folder : str) -> numpy.array:
     # taken from https://gitlab.com/csb.ethz/efmtool/
     # efmtool stores the computed EFMs in one or more .mat files. This function
@@ -93,3 +96,10 @@ def read_efms_from_mat(folder : str) -> numpy.array:
 
     return numpy.concatenate(efm_parts, axis=1)
 
+def read_efms_from_bin(binary_doubles_file : str) -> numpy.array:
+    with open('efms.bin', 'rb') as fh:
+        num_efm = numpy.fromfile(fh, dtype='>i8', count=1)[0]
+        num_reac = numpy.fromfile(fh, dtype='>i4', count=1)[0]
+        numpy.fromfile(fh, numpy.byte, count=1) # skip binary flag (boolean written as byte)
+        efms = numpy.fromfile(fh, dtype='>d', count=num_reac*num_efm)
+    return efms.reshape((num_reac, num_efm), order='F')

@@ -59,6 +59,7 @@ numpy.max(numpy.abs(stdf.values@efm_mmap))
 import efmtool_link.efmtool_extern as efmtool_extern
 import numpy
 efms = efmtool_extern.calculate_flux_modes(stdf.values, numpy.array(rev, dtype=int))
+numpy.max(numpy.abs(stdf.values@efms))
 
 # %% test
 def test2(n, a, m=0, dec=None, tol=0):
