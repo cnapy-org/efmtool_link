@@ -1,4 +1,4 @@
-import efmtool_link
+import efmtool_link.efmtool_intern as efmtool_intern
 import numpy
 import cobra
 import sympy
@@ -18,9 +18,9 @@ import time
 def compress_model(model, remove_rxns=[], tolerance=0.0):
     remove_rxns = [model.reactions.index(r) for r in remove_rxns]
     # the subsets are in the columns of subset_matrix, its rows correspond to the reactions
-    subset_matrix = efmtool_link.compress_rat_efmtool(cobra.util.array.create_stoichiometric_matrix(model, array_type='dok'),
+    subset_matrix = efmtool_intern.compress_rat_efmtool(cobra.util.array.create_stoichiometric_matrix(model, array_type='dok'),
                      [r.reversibility for r in model.reactions], remove_cr=False, tolerance=tolerance,
-                     compression_method=efmtool_link.subset_compression, remove_rxns=remove_rxns)[1]
+                     compression_method=efmtool_intern.subset_compression, remove_rxns=remove_rxns)[1]
     compr_model = model.copy()
     config = Configuration()
     del_rxns = numpy.logical_not(numpy.any(subset_matrix, axis=1)) # blocked reactions
@@ -57,7 +57,7 @@ def compress_model(model, remove_rxns=[], tolerance=0.0):
 
 def remove_conservation_relations(model, return_reduced_only=False, tolerance=0):
     stoich_mat = cobra.util.array.create_stoichiometric_matrix(model, array_type='lil')
-    basic_metabolites = efmtool_link.basic_columns_rat(stoich_mat.transpose().toarray(), tolerance=tolerance)
+    basic_metabolites = efmtool_intern.basic_columns_rat(stoich_mat.transpose().toarray(), tolerance=tolerance)
     if return_reduced_only:
         reduced = stoich_mat[basic_metabolites, :]
         return reduced, basic_metabolites
@@ -112,7 +112,7 @@ def compress_model_sympy(model, remove_rxns=None, rational_conversion='base10'):
             stoich_mat.setValueAt(model.metabolites.index(k.id), i, BigFraction(n, d))
             # reversible[i] = compr_model.reactions[i].reversibility # somehow makes problems with the smc.compress call
     
-    smc = StoichMatrixCompressor(efmtool_link.subset_compression)
+    smc = StoichMatrixCompressor(efmtool_intern.subset_compression)
     if len(remove_rxns) == 0:
         reacNames = jpype.JString[num_reac]
         remove_rxns = None
@@ -128,7 +128,7 @@ def compress_model_sympy(model, remove_rxns=None, rational_conversion='base10'):
 
     # would be faster to do the computations with floats and afterwards substitute the coefficients
     # with rationals from efmtool
-    subset_matrix= efmtool_link.jpypeArrayOfArrays2numpy_mat(comprec.post.getDoubleRows())
+    subset_matrix= efmtool_intern.jpypeArrayOfArrays2numpy_mat(comprec.post.getDoubleRows())
     del_rxns = numpy.logical_not(numpy.any(subset_matrix, axis=1)) # blocked reactions
     for j in range(subset_matrix.shape[1]):
         rxn_idx = subset_matrix[:, j].nonzero()[0]

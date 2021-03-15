@@ -1,5 +1,5 @@
 #%%
-import efmtool_link
+import efmtool_link.efmtool_intern as efmtool_intern
 import numpy
     
 # %%
@@ -12,26 +12,27 @@ rev = [r.reversibility for r in model.reactions]
 stdf = cobra.util.array.create_stoichiometric_matrix(model, array_type='DataFrame')
 
 #%%
-kn = efmtool_link.null_rat_efmtool(stdf.values)
+kn = efmtool_intern.null_rat_efmtool(stdf.values)
 numpy.max(numpy.abs(stdf.values.dot(kn)))
 
 # %% direct call to efmtool via Java 
 import time
 import os
 import subprocess
-import efmtool_extern
+import efmtool_link.efmtool_extern as efmtool_extern
 
 efmtool_extern.write_efmtool_input(stdf.values, numpy.array(rev, dtype=int), stdf.columns, stdf.index)
-java_executable = os.path.join(str(efmtool_link.jSystem.getProperty("java.home")), "bin", "java")
+java_executable = os.path.join(str(efmtool_intern.jSystem.getProperty("java.home")), "bin", "java")
 #java_executable = r"C:\Program Files\AdoptOpenJDK\jdk-11.0.8.10-hotspot\bin\java"
 cp = subprocess.Popen([java_executable,
-"-cp", efmtool_link.efmtool_jar, "ch.javasoft.metabolic.efm.main.CalculateFluxModes",
+"-cp", efmtool_intern.efmtool_jar, "ch.javasoft.metabolic.efm.main.CalculateFluxModes",
 # "-cp", r"E:\gwdg_owncloud\CNAgit\CellNetAnalyzer\code\ext\efmtool\patch.jar;E:\gwdg_owncloud\CNAgit\CellNetAnalyzer\code\ext\efmtool\lib\metabolic-efm-all.jar", "ch.javasoft.metabolic.efm.main.CalculateFluxModes",
  '-kind', 'stoichiometry', '-arithmetic', 'double', '-zero', '1e-10',
  '-compression', 'default', '-log', 'file', 'log.txt', '-level', 'INFO',
  '-maxthreads', '-1', '-normalize', 'min', '-adjacency-method', 'pattern-tree-minzero', 
  '-rowordering', 'MostZerosOrAbsLexMin', '-tmpdir', '.', '-stoich', 'stoich.txt', '-rev', 
- 'revs.txt', '-meta', 'mnames.txt', '-reac', 'rnames.txt', '-out', 'matlab', 'efms.mat'])#,
+ 'revs.txt', '-meta', 'mnames.txt', '-reac', 'rnames.txt', '-out', 'binary-doubles', 'efms.bin'])#, # Java uese big endian
+#  'revs.txt', '-meta', 'mnames.txt', '-reac', 'rnames.txt', '-out', 'matlab', 'efms.mat'])#,
 #  stdout = subprocess.PIPE, stderr = subprocess.PIPE) #, universal_newlines=True, bufsize=1
 time.sleep(0.5) # wait for efmtool to start and open the log file
 with open("log.txt") as log_file:
@@ -42,11 +43,23 @@ with open("log.txt") as log_file:
             print(ln)
         else:
             time.sleep(0.1)
+# %% read efm binary format
+with open('efms.bin', 'rb') as fh:
+    num_efm = numpy.fromfile(fh, dtype='>i8', count=1)[0]
+    num_reac = numpy.fromfile(fh, dtype='>i4', count=1)[0]
+    numpy.fromfile(fh, numpy.byte, count=1) # skip binary flag (boolean written as byte)
+    efm = numpy.fromfile(fh, dtype='>d', count=num_reac*num_efm)
+numpy.max(numpy.abs(stdf.values@efm.reshape((num_reac, num_efm), order='F')))
+numpy.max(numpy.abs(stdf.values@efm.reshape((num_efm, num_reac), order='C').transpose()))
+# %% open as memory map
+efm_mmap = numpy.memmap('efms.bin', mode='r', dtype='>d', offset=13, shape=(num_reac, num_efm), order='F')
+numpy.max(numpy.abs(stdf.values@efm_mmap))
 
 # %%
-import efmtool_extern
+import efmtool_link.efmtool_extern as efmtool_extern
 import numpy
 efms = efmtool_extern.calculate_flux_modes(stdf.values, numpy.array(rev, dtype=int))
+numpy.max(numpy.abs(stdf.values@efms))
 
 # %% test
 def test2(n, a, m=0, dec=None, tol=0):
@@ -70,10 +83,10 @@ def test2(n, a, m=0, dec=None, tol=0):
         #x = numpy.hstack((x, x.dot(numpy.random.randint(0, 10, (n, n)))))
         p = numpy.random.permutation(n+a)
         x = x[:, p]
-        bc = efmtool_link.basic_columns_rat(x, tol)
+        bc = efmtool_intern.basic_columns_rat(x, tol)
         assert len(bc) == n
         assert numpy.linalg.matrix_rank(x[:, bc]) == n
-        assert efmtool_link.null_rat_efmtool(x, tol).shape[1] == a
+        assert efmtool_intern.null_rat_efmtool(x, tol).shape[1] == a
         #print(numpy.linalg.matrix_rank(x))
         #print(null_rat_efmtool(x).shape)
         #print(numpy.where(p >= n))
