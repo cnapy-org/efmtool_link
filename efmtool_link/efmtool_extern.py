@@ -97,7 +97,7 @@ def read_efms_from_mat(folder : str) -> numpy.array:
     return numpy.concatenate(efm_parts, axis=1)
 
 def read_efms_from_bin(binary_doubles_file : str) -> numpy.array:
-    with open('efms.bin', 'rb') as fh:
+    with open(binary_doubles_file, 'rb') as fh:
         num_efm = numpy.fromfile(fh, dtype='>i8', count=1)[0]
         num_reac = numpy.fromfile(fh, dtype='>i4', count=1)[0]
         numpy.fromfile(fh, numpy.byte, count=1) # skip binary flag (boolean written as byte)
