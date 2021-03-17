@@ -87,7 +87,7 @@ def compress_model_sympy(model, remove_rxns=None, rational_conversion='base10'):
     for i in range(num_reac):
         if model.reactions[i].bounds == (0, 0): # blocked reaction
             remove_rxns.append(model.reactions[i].id)
-        elif model.reactions[i].upper_bound <= 0: # can run in backwards direction only
+        elif model.reactions[i].upper_bound <= 0: # can run in backwards direction only (is and stays classified as irreversible)
             model.reactions[i] *= -1
             flipped.append(i)
             print("Flipped", model.reactions[i].id)
@@ -96,12 +96,12 @@ def compress_model_sympy(model, remove_rxns=None, rational_conversion='base10'):
             if type(v) is float or type(v) is int:
                 if type(v) is int or v.is_integer():
                     # v = int(v)
-                    v = sympy.Rational(v) # for simplicity
-                    # compr_model.reactions[i]._metabolites[k] = int(v)
+                    # n = int2jBigInteger(v)
+                    # d = BigInteger.ONE
+                    v = sympy.Rational(v) # for simplicity and actually slighlty faster (?)
                 else:
                     v = sympy.nsimplify(v, rational=True, rational_conversion=rational_conversion)
                     # v = sympy.Rational(v)
-                    # compr_model.reactions[i]._metabolites[k] = sympy.Rational(v) 
                 model.reactions[i]._metabolites[k] = v # only changes coefficient in the model, not in the solver
             elif type(v) is not sympy.Rational:
                 raise TypeError
@@ -135,6 +135,7 @@ def compress_model_sympy(model, remove_rxns=None, rational_conversion='base10'):
         for i in range(len(rxn_idx)): # rescale all reactions in this subset
             # !! swaps lb, ub when the scaling factor is < 0, but does not change the magnitudes
             factor = jBigFraction2sympyRat(comprec.post.getBigFractionValueAt(rxn_idx[i], j))
+            # factor = jBigFraction2intORsympyRat(comprec.post.getBigFractionValueAt(rxn_idx[i], j)) # does not appear to make a speed difference
             model.reactions[rxn_idx[i]] *=  factor #subset_matrix[rxn_idx[i], j]
             # factor = abs(float(factor)) # context manager has trouble with non-float bounds
             if model.reactions[rxn_idx[i]].lower_bound not in (0, config.lower_bound, -float('inf')):
@@ -146,9 +147,6 @@ def compress_model_sympy(model, remove_rxns=None, rational_conversion='base10'):
         for i in range(1, len(rxn_idx)): # merge reactions
             # !! keeps bounds of reactions[rxn_idx[0]]
             model.reactions[rxn_idx[0]] += model.reactions[rxn_idx[i]]
-            # the stoichiometries calculated here are less exact than those in rd from compress_rat_efmtool
-            # therefore when calulating e.g. conservation relations of the compressed model a non-zero tolerance
-            # may be needed to recover the conservation relations
             if model.reactions[rxn_idx[i]].lower_bound > model.reactions[rxn_idx[0]].lower_bound:
                 model.reactions[rxn_idx[0]].lower_bound = model.reactions[rxn_idx[i]].lower_bound
             if model.reactions[rxn_idx[i]].upper_bound < model.reactions[rxn_idx[0]].upper_bound:
@@ -173,6 +171,12 @@ def get_rxns_in_subsets(compr_model):
 def jBigFraction2sympyRat(val): 
     return jBigIntegerPair2sympyRat(val.getNumerator(), val.getDenominator())
 
+def jBigFraction2intORsympyRat(val): 
+    if val.getDenominator().equals(BigInteger.ONE):
+        return jBigInteger2int(val.getNumerator())
+    else:
+        return jBigIntegerPair2sympyRat(val.getNumerator(), val.getDenominator())
+
 def jBigIntegerPair2sympyRat(numer, denom): 
     if numer.bitLength() <= 63:
         numer = numer.longValue()
@@ -191,6 +195,18 @@ def jBigIntegerPair2sympyRat(numer, denom):
 #     if numer.bit_length() <= 63 and denom.bit_lenth() <= 63:
 #         return BigFraction(numer, denom)
 # ...
+
+def int2jBigInteger(val):
+    if val.bit_length() <= 63:
+        return BigInteger.valueOf(val)
+    else:
+        return BigInteger(str(val))
+
+def jBigInteger2int(val):
+    if val.bitLength() <= 63:
+        return val.longValue()
+    else:
+        return int(val.toString())
 
 def sympyRat2jBigIntegerPair(val):
     numer = val.numerator()

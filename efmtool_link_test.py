@@ -51,6 +51,7 @@ with open('efms.bin', 'rb') as fh:
     efm = numpy.fromfile(fh, dtype='>d', count=num_reac*num_efm)
 numpy.max(numpy.abs(stdf.values@efm.reshape((num_reac, num_efm), order='F')))
 numpy.max(numpy.abs(stdf.values@efm.reshape((num_efm, num_reac), order='C').transpose()))
+
 # %% open as memory map
 efm_mmap = numpy.memmap('efms.bin', mode='r', dtype='>d', offset=13, shape=(num_reac, num_efm), order='F')
 numpy.max(numpy.abs(stdf.values@efm_mmap))
@@ -58,8 +59,28 @@ numpy.max(numpy.abs(stdf.values@efm_mmap))
 # %%
 import efmtool_link.efmtool_extern as efmtool_extern
 import numpy
+import pickle
 efms = efmtool_extern.calculate_flux_modes(stdf.values, numpy.array(rev, dtype=int))
 numpy.max(numpy.abs(stdf.values@efms))
+# %%
+import os
+wd = efmtool_extern.calculate_flux_modes(stdf.values, numpy.array(rev, dtype=int), return_work_dir_only=True)
+with open(os.path.join(wd.name, 'efms.bin'), 'rb') as fh:
+    num_efm = numpy.fromfile(fh, dtype='>i8', count=1)[0]
+    num_reac = numpy.fromfile(fh, dtype='>i4', count=1)[0]
+# %%
+# import cnapy.flux_vector_container
+efms = FluxVectorMemmap('efms.bin', (num_reac, num_efm), model.reactions.list_attr('id'), offset=13, containing_temp_dir=wd) 
+# %% 
+import pickle
+# with open(os.path.join(wd.name, 'efms.bin'), 'ab') as fh:
+#     pickle.dump()
+#     # numpy.array(model.reactions.list_attr('id')).tofile(fh) # only constant length strings appear possible
+import zipfile
+with zipfile.ZipFile('efms.zip', mode='w') as zf: # mode w destroys an existing file, in-place zipping appears not to be possible
+    # does not overwrite an existing file, for this use mode 'w'
+    zf.write(os.path.join(wd.name, 'efms.bin'), arcname='efms.bin')
+    zf.writestr('efm_info', pickle.dumps({'num_reac': num_reac, 'num_efm': num_efm, 'reac_id': model.reactions.list_attr('id')}))
 
 # %% test
 def test2(n, a, m=0, dec=None, tol=0):

@@ -3,7 +3,7 @@ import glob
 import os
 import subprocess
 import numpy
-import scipy
+# import scipy
 
 # try to find a working java executable
 _java_executable = 'java'
@@ -30,7 +30,8 @@ if _java_executable == '':
 
 efmtool_jar = os.path.join(os.path.dirname(__file__), 'lib', 'metabolic-efm-all.jar')
 
-def calculate_flux_modes(st : numpy.array, reversible, reaction_names=None, metabolite_names=None, java_executable=None):
+def calculate_flux_modes(st : numpy.array, reversible, reaction_names=None, metabolite_names=None, java_executable=None,
+                         return_work_dir_only=False):
     if java_executable is None:
         java_executable = _java_executable
     if reaction_names is None:
@@ -39,40 +40,44 @@ def calculate_flux_modes(st : numpy.array, reversible, reaction_names=None, meta
         metabolite_names = ['M'+str(i) for i in range(st.shape[0])]
     
     curr_dir = os.getcwd()
-    with tempfile.TemporaryDirectory() as work_dir:
-        print(work_dir)
-        os.chdir(work_dir)
-        write_efmtool_input(st, reversible, reaction_names, metabolite_names)
+#    with tempfile.TemporaryDirectory() as work_dir:
+    work_dir = tempfile.TemporaryDirectory()
+    print(work_dir.name)
+    os.chdir(work_dir.name)
+    write_efmtool_input(st, reversible, reaction_names, metabolite_names)
 
-        try:
-            cp = subprocess.Popen([java_executable,
-            "-cp", efmtool_jar, "ch.javasoft.metabolic.efm.main.CalculateFluxModes",
-            '-kind', 'stoichiometry', '-arithmetic', 'double', '-zero', '1e-10',
-            '-compression', 'default', '-log', 'console', '-level', 'INFO',
-            '-maxthreads', '-1', '-normalize', 'min', '-adjacency-method', 'pattern-tree-minzero', 
-            '-rowordering', 'MostZerosOrAbsLexMin', '-tmpdir', '.', '-stoich', 'stoich.txt', '-rev', 
-            'revs.txt', '-meta', 'mnames.txt', '-reac', 'rnames.txt', '-out', 'binary-doubles', 'efms.bin'],
-            # 'revs.txt', '-meta', 'mnames.txt', '-reac', 'rnames.txt', '-out', 'matlab', 'efms.mat'],
-            stdout = subprocess.PIPE, stderr = subprocess.PIPE, universal_newlines=True)
-            # might there be a danger of deadlock in case an error produces a large text output that blocks the pipe?
-            while cp.poll() is None:
-                ln = cp.stdout.readlines(1) # blocks until one line has been read
-                if len(ln) > 0: # suppress empty lines that can occur in case of external termination
-                    print(ln[0], end='')
-            print(cp.stderr.readlines())
-            success = cp.poll() == 0
-        except:
-            success = False
-        
-        os.chdir(curr_dir)
-        if success:
-            # efms = read_efms_from_mat(work_dir)
-            efms = read_efms_from_bin(os.path.join(work_dir, 'efms.bin'))
+    try:
+        cp = subprocess.Popen([java_executable,
+        "-cp", efmtool_jar, "ch.javasoft.metabolic.efm.main.CalculateFluxModes",
+        '-kind', 'stoichiometry', '-arithmetic', 'double', '-zero', '1e-10',
+        '-compression', 'default', '-log', 'console', '-level', 'INFO',
+        '-maxthreads', '-1', '-normalize', 'min', '-adjacency-method', 'pattern-tree-minzero', 
+        '-rowordering', 'MostZerosOrAbsLexMin', '-tmpdir', '.', '-stoich', 'stoich.txt', '-rev', 
+        'revs.txt', '-meta', 'mnames.txt', '-reac', 'rnames.txt', '-out', 'binary-doubles', 'efms.bin'],
+        # 'revs.txt', '-meta', 'mnames.txt', '-reac', 'rnames.txt', '-out', 'matlab', 'efms.mat'],
+        stdout = subprocess.PIPE, stderr = subprocess.PIPE, universal_newlines=True)
+        # might there be a danger of deadlock in case an error produces a large text output that blocks the pipe?
+        while cp.poll() is None:
+            ln = cp.stdout.readlines(1) # blocks until one line has been read
+            if len(ln) > 0: # suppress empty lines that can occur in case of external termination
+                print(ln[0], end='')
+        print(cp.stderr.readlines())
+        success = cp.poll() == 0
+    except:
+        success = False
+    
+    os.chdir(curr_dir)
+    if success:
+        if return_work_dir_only:
+            return work_dir
         else:
-            print("Emftool failure")
-            efms = None
+        # efms = read_efms_from_mat(work_dir)
+            return read_efms_from_bin(os.path.join(work_dir.name, 'efms.bin'))
+    else:
+        print("Emftool failure")
+        return None
 
-    return efms
+    # return efms
 
 def write_efmtool_input(st, reversible, reaction_names, metabolite_names):
     numpy.savetxt(r"stoich.txt", st)
@@ -84,17 +89,17 @@ def write_efmtool_input(st, reversible, reaction_names, metabolite_names):
         file.write(' '.join('"' + x + '"' for x in reaction_names))
 
 # loading can sometimes fail because of unclear string encoding used by MatFileWriter (e.g. when there is an 'ä' in the string)
-def read_efms_from_mat(folder : str) -> numpy.array:
-    # taken from https://gitlab.com/csb.ethz/efmtool/
-    # efmtool stores the computed EFMs in one or more .mat files. This function
-    # finds them and loads them into a single numpy array.
-    efm_parts : List[np.array] = []
-    files_list = sorted(glob.glob(os.path.join(folder, 'efms_*.mat')))
-    for f in files_list:
-        mat = scipy.io.loadmat(f, verify_compressed_data_integrity=False)
-        efm_parts.append(mat['mnet']['efms'][0, 0])
+# def read_efms_from_mat(folder : str) -> numpy.array:
+#     # taken from https://gitlab.com/csb.ethz/efmtool/
+#     # efmtool stores the computed EFMs in one or more .mat files. This function
+#     # finds them and loads them into a single numpy array.
+#     efm_parts : List[np.array] = []
+#     files_list = sorted(glob.glob(os.path.join(folder, 'efms_*.mat')))
+#     for f in files_list:
+#         mat = scipy.io.loadmat(f, verify_compressed_data_integrity=False)
+#         efm_parts.append(mat['mnet']['efms'][0, 0])
 
-    return numpy.concatenate(efm_parts, axis=1)
+#     return numpy.concatenate(efm_parts, axis=1)
 
 def read_efms_from_bin(binary_doubles_file : str) -> numpy.array:
     with open(binary_doubles_file, 'rb') as fh:
