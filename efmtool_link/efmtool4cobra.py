@@ -82,7 +82,7 @@ def compress_model_sympy(model, remove_rxns=None, rational_conversion='base10'):
     stoich_mat = DefaultBigIntegerRationalMatrix(num_met, num_reac)
     # reversible = jpype.JBoolean[num_reac]
     reversible = jpype.JBoolean[:]([r.reversibility for r in model.reactions])
-    start_time = time.monotonic()
+    # start_time = time.monotonic()
     flipped = []
     for i in range(num_reac):
         if model.reactions[i].bounds == (0, 0): # blocked reaction
@@ -123,8 +123,8 @@ def compress_model_sympy(model, remove_rxns=None, rational_conversion='base10'):
         print(remove_rxns.toString())
     comprec = smc.compress(stoich_mat, reversible, jpype.JString[num_met], reacNames, remove_rxns)
     del remove_rxns
-    print(time.monotonic() - start_time) # 20 seconds in iJO1366 without remove_rxns
-    start_time = time.monotonic()
+    # print(time.monotonic() - start_time) # 20 seconds in iJO1366 without remove_rxns
+    # start_time = time.monotonic()
 
     # would be faster to do the computations with floats and afterwards substitute the coefficients
     # with rationals from efmtool
@@ -152,7 +152,7 @@ def compress_model_sympy(model, remove_rxns=None, rational_conversion='base10'):
             if model.reactions[rxn_idx[i]].upper_bound < model.reactions[rxn_idx[0]].upper_bound:
                 model.reactions[rxn_idx[0]].upper_bound = model.reactions[rxn_idx[i]].upper_bound
             del_rxns[rxn_idx[i]] = True
-    print(time.monotonic() - start_time) # 11 seconds in iJO1366
+    # print(time.monotonic() - start_time) # 11 seconds in iJO1366
     del_rxns = numpy.where(del_rxns)[0]
     for i in range(len(del_rxns)-1, -1, -1): # delete in reversed index order to keep indices valid
         model.reactions[del_rxns[i]].remove_from_model(remove_orphans=True)
@@ -287,3 +287,13 @@ def dokRatMat2lilFloatMat(mat):
     for (r, c), v in mat.items():
         fmat[r, c] = float(v)
     return fmat
+
+def get_reversibility(model):
+    reversible = numpy.ones(len(model.reactions), dtype=numpy.int)
+    irrev_backwards_idx = []
+    for i in range(len(model.reactions)):
+        if not model.reactions[i].reversibility:
+            reversible[i] = 0
+            if model.reactions[i].upper_bound <= 0: # can run in backwards direction only
+                irrev_backwards_idx.append(i)
+    return reversible, irrev_backwards_idx

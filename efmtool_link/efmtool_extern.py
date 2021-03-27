@@ -40,9 +40,8 @@ def calculate_flux_modes(st : numpy.array, reversible, reaction_names=None, meta
         metabolite_names = ['M'+str(i) for i in range(st.shape[0])]
     
     curr_dir = os.getcwd()
-#    with tempfile.TemporaryDirectory() as work_dir:
     work_dir = tempfile.TemporaryDirectory()
-    print(work_dir.name)
+    # print(work_dir.name)
     os.chdir(work_dir.name)
     write_efmtool_input(st, reversible, reaction_names, metabolite_names)
 
@@ -80,7 +79,9 @@ def calculate_flux_modes(st : numpy.array, reversible, reaction_names=None, meta
     # return efms
 
 def write_efmtool_input(st, reversible, reaction_names, metabolite_names):
-    numpy.savetxt(r"stoich.txt", st)
+    if type(st) is not numpy.ndarray: # in case st is a sparse array
+        st = st.toarray()
+    numpy.savetxt(r"stoich.txt", numpy.array(st))
     with open('revs.txt', 'w') as file:
         file.write(' '.join(str(x) for x in reversible))
     with open('mnames.txt', 'w') as file:

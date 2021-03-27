@@ -8,7 +8,7 @@ import cobra.util.array
 # model = cobra.io.read_sbml_model(r"..\CNApy\projects\ECC2comp\ECC2comp.xml")
 model = cobra.io.read_sbml_model(r"metatool_example_no_ext.xml")
 #model = cobra.io.read_sbml_model(r"..\projects\iJO1366\iJO1366.xml")
-rev = [r.reversibility for r in model.reactions]
+rev = [int(r.reversibility) for r in model.reactions]
 stdf = cobra.util.array.create_stoichiometric_matrix(model, array_type='DataFrame')
 
 #%%
@@ -48,29 +48,39 @@ with open('efms.bin', 'rb') as fh:
     num_efm = numpy.fromfile(fh, dtype='>i8', count=1)[0]
     num_reac = numpy.fromfile(fh, dtype='>i4', count=1)[0]
     numpy.fromfile(fh, numpy.byte, count=1) # skip binary flag (boolean written as byte)
-    efm = numpy.fromfile(fh, dtype='>d', count=num_reac*num_efm)
+    efm = numpy.fromfile(fh, dtype='>d', count=num_reac*num_efm) # '<d' or 'float64' will not work
 numpy.max(numpy.abs(stdf.values@efm.reshape((num_reac, num_efm), order='F')))
 numpy.max(numpy.abs(stdf.values@efm.reshape((num_efm, num_reac), order='C').transpose()))
 
 # %% open as memory map
-efm_mmap = numpy.memmap('efms.bin', mode='r', dtype='>d', offset=13, shape=(num_reac, num_efm), order='F')
+efm_mmap = numpy.memmap('efms.bin', mode='r+', dtype='>d', offset=13, shape=(num_reac, num_efm), order='F')
 numpy.max(numpy.abs(stdf.values@efm_mmap))
 
 # %%
 import efmtool_link.efmtool_extern as efmtool_extern
 import numpy
 import pickle
-efms = efmtool_extern.calculate_flux_modes(stdf.values, numpy.array(rev, dtype=int))
+efms = efmtool_extern.calculate_flux_modes(stdf.values, rev) #numpy.array(rev, dtype=int))
 numpy.max(numpy.abs(stdf.values@efms))
+# %%
+fvc = FluxVectorContainer(efms.transpose(), model.reactions.list_attr('id'))
+fvc.save('test')
+# fvm = FluxVectorMemmap('test.zip')
+
 # %%
 import os
 wd = efmtool_extern.calculate_flux_modes(stdf.values, numpy.array(rev, dtype=int), return_work_dir_only=True)
-with open(os.path.join(wd.name, 'efms.bin'), 'rb') as fh:
-    num_efm = numpy.fromfile(fh, dtype='>i8', count=1)[0]
-    num_reac = numpy.fromfile(fh, dtype='>i4', count=1)[0]
+# with open(os.path.join(wd.name, 'efms.bin'), 'rb') as fh:
+#     num_efm = numpy.fromfile(fh, dtype='>i8', count=1)[0]
+#     num_reac = numpy.fromfile(fh, dtype='>i4', count=1)[0]
 # %%
 # import cnapy.flux_vector_container
-efms = FluxVectorMemmap('efms.bin', (num_reac, num_efm), model.reactions.list_attr('id'), offset=13, containing_temp_dir=wd) 
+# efms = FluxVectorMemmap('efms.bin', (num_reac, num_efm), model.reactions.list_attr('id'), offset=13, containing_temp_dir=wd)
+efms = FluxVectorMemmap('efms.bin', model.reactions.list_attr('id'), containing_temp_dir=wd)
+efms.save('test.npz')
+fvc = FluxVectorContainer('test.npz')
+efms[0] == fvc[0]
+
 # %% 
 import pickle
 # with open(os.path.join(wd.name, 'efms.bin'), 'ab') as fh:
