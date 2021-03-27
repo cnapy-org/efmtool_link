@@ -9,4 +9,5 @@ setup(name='efmtool_link',
       license='Apache License 2.0',
       packages=['efmtool_link'],
       package_data={'efmtool_link': ['lib/*.jar']},
+      install_requires=['jpype1', 'numpy', 'scipy', 'cobra'],
       zip_safe=False)
