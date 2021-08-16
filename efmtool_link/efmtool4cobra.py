@@ -69,11 +69,16 @@ def remove_conservation_relations(model, return_reduced_only=False, tolerance=0)
             model.metabolites.get_by_id(m).remove_from_model()
         return basic_metabolites
 
-def compress_model_sympy(model, remove_rxns=None, rational_conversion='base10'):
+def compress_model_sympy(model, remove_rxns=None, rational_conversion='base10', remove_gene_reaction_rules=True):
     # modifies the model that is passed as first parameter; if you want to preserve the original model copy it first
     # removes reactions with bounds (0, 0)
     # all irreversible reactions in the compressed model will flow in the forward direction
     # does not remove the conservation relations, see remove_conservation_relations_sympy for this
+    if remove_gene_reaction_rules:
+        # remove all rules because processing them during combination of reactions into subsets
+        # can sometimes raise MemoryErrors (probably when subsets get very large)
+        for r in model.reactions:
+            r.gene_reaction_rule = ''
     if remove_rxns is None:
         remove_rxns = []
     config = Configuration()

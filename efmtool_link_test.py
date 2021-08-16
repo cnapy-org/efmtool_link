@@ -5,9 +5,9 @@ import numpy
 # %%
 import cobra
 import cobra.util.array
-# model = cobra.io.read_sbml_model(r"..\CNApy\projects\ECC2comp\ECC2comp.xml")
+# model = cobra.io.read_sbml_model(r"..\cnapy-projects\ECC2comp\model.sbml")
 model = cobra.io.read_sbml_model(r"metatool_example_no_ext.xml")
-#model = cobra.io.read_sbml_model(r"..\projects\iJO1366\iJO1366.xml")
+# model = cobra.io.read_sbml_model(r"..\cnapy-projects\iJO1366\model.sbml")
 rev = numpy.array([int(r.reversibility) for r in model.reactions])
 stdf = cobra.util.array.create_stoichiometric_matrix(model, array_type='DataFrame')
 
