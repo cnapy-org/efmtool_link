@@ -1,9 +1,9 @@
 import tempfile
-import glob
+import time
 import os
 import subprocess
 import numpy
-# import scipy
+import psutil
 
 # try to find a working java executable
 _java_executable = 'java'
@@ -29,9 +29,15 @@ if _java_executable == '':
 # _java_executable = r'C:\Program Files\AdoptOpenJDK\jdk-11.0.8.10-hotspot\bin\java.exe'
 
 efmtool_jar = os.path.join(os.path.dirname(__file__), 'lib', 'metabolic-efm-all.jar')
+default_jvm_memory = max(psutil.virtual_memory().total//(1024**2) - 2048, 128) # MB
+cpu_cores = psutil.cpu_count(False)
+if cpu_cores == None:
+    cpu_cores = os.cpu_count()
+default_threads = min(6, cpu_cores) # limit to 6 threads because EFMtool does not appear to profit from more
 
 def calculate_flux_modes(st : numpy.array, reversible, reaction_names=None, metabolite_names=None, java_executable=None,
-                         return_work_dir_only=False):
+                         return_work_dir_only=False, jvm_max_memory=default_jvm_memory, max_threads=default_threads,
+                         abort_callback=None):
     if java_executable is None:
         java_executable = _java_executable
     if reaction_names is None:
@@ -41,26 +47,46 @@ def calculate_flux_modes(st : numpy.array, reversible, reaction_names=None, meta
     
     curr_dir = os.getcwd()
     work_dir = tempfile.TemporaryDirectory()
-    # print(work_dir.name)
     os.chdir(work_dir.name)
     write_efmtool_input(st, reversible, reaction_names, metabolite_names)
 
     try:
-        cp = subprocess.Popen([java_executable,
+        java_call = [java_executable, '-Xmx'+str(jvm_max_memory)+'M',
         "-cp", efmtool_jar, "ch.javasoft.metabolic.efm.main.CalculateFluxModes",
         '-kind', 'stoichiometry', '-arithmetic', 'double', '-zero', '1e-10',
-        '-compression', 'default', '-log', 'console', '-level', 'INFO',
-        '-maxthreads', '-1', '-normalize', 'min', '-adjacency-method', 'pattern-tree-minzero', 
-        '-rowordering', 'MostZerosOrAbsLexMin', '-tmpdir', '.', '-stoich', 'stoich.txt', '-rev', 
-        'revs.txt', '-meta', 'mnames.txt', '-reac', 'rnames.txt', '-out', 'binary-doubles', 'efms.bin'],
+        '-compression', 'default', '-level', 'INFO', '-maxthreads', str(max_threads),
+        '-normalize', 'min', '-adjacency-method', 'pattern-tree-minzero',
+        '-rowordering', 'MostZerosOrAbsLexMin', '-tmpdir', '.', '-stoich', 'stoich.txt', '-rev',
+        'revs.txt', '-meta', 'mnames.txt', '-reac', 'rnames.txt', '-out', 'binary-doubles', 'efms.bin']
         # 'revs.txt', '-meta', 'mnames.txt', '-reac', 'rnames.txt', '-out', 'matlab', 'efms.mat'],
-        stdout = subprocess.PIPE, stderr = subprocess.PIPE, universal_newlines=True)
-        # might there be a danger of deadlock in case an error produces a large text output that blocks the pipe?
-        while cp.poll() is None:
-            ln = cp.stdout.readlines(1) # blocks until one line has been read
-            if len(ln) > 0: # suppress empty lines that can occur in case of external termination
-                print(ln[0], end='')
-        print(cp.stderr.readlines())
+        if abort_callback is None:
+            java_call = java_call + ['-log', 'console']
+            cp = subprocess.Popen(java_call, stdout = subprocess.PIPE, stderr = subprocess.PIPE,
+                                  universal_newlines=True)
+
+            # might there be a danger of deadlock in case an error produces a large text output that blocks the pipe?
+            while cp.poll() is None:
+                ln = cp.stdout.readlines(1) # blocks until one line has been read
+                if len(ln) > 0: # suppress empty lines that can occur in case of external termination
+                    print(ln[0], end='')
+            print(cp.stderr.readlines())
+        else:
+            java_call = java_call + ['-log', 'file', 'log.txt']
+            cp = subprocess.Popen(java_call)
+            while cp.poll() is None: # wait for log file to appear
+                time.sleep(0.1)
+                if os.path.isfile('log.txt'):
+                    break
+            with open("log.txt") as log_file:
+                while cp.poll() is None:
+                    time.sleep(1.0)
+                    ln= log_file.readlines()
+                    if len(ln) > 0:
+                        print("".join(ln), end='')
+                    if abort_callback():
+                        cp.kill()
+                        time.sleep(1.0) # allow some time for EFMtool to die properly so that work_dir can be cleanly deleted
+                        break
         success = cp.poll() == 0
     except:
         success = False
@@ -73,10 +99,8 @@ def calculate_flux_modes(st : numpy.array, reversible, reaction_names=None, meta
         # efms = read_efms_from_mat(work_dir)
             return read_efms_from_bin(os.path.join(work_dir.name, 'efms.bin'))
     else:
-        print("Emftool failure")
+        print("EFMtool failure")
         return None
-
-    # return efms
 
 def write_efmtool_input(st, reversible, reaction_names, metabolite_names):
     if type(st) is not numpy.ndarray: # in case st is a sparse array

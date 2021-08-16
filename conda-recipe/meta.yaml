@@ -1,4 +1,4 @@
-{% set version = '0.0.2' %}
+{% set version = '0.0.3' %}
 
 package:
   name: efmtool_link
@@ -17,6 +17,7 @@ requirements:
     - numpy
     - jpype1
     - cobra
+    - psutil
 
 
 build:
