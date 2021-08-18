@@ -37,7 +37,7 @@ default_threads = min(6, cpu_cores) # limit to 6 threads because EFMtool does no
 
 def calculate_flux_modes(st : numpy.array, reversible, reaction_names=None, metabolite_names=None, java_executable=None,
                          return_work_dir_only=False, jvm_max_memory=default_jvm_memory, max_threads=default_threads,
-                         abort_callback=None):
+                         print_progress_function=print, abort_callback=None):
     if java_executable is None:
         java_executable = _java_executable
     if reaction_names is None:
@@ -68,8 +68,8 @@ def calculate_flux_modes(st : numpy.array, reversible, reaction_names=None, meta
             while cp.poll() is None:
                 ln = cp.stdout.readlines(1) # blocks until one line has been read
                 if len(ln) > 0: # suppress empty lines that can occur in case of external termination
-                    print(ln[0], end='')
-            print(cp.stderr.readlines())
+                    print_progress_function(ln[0].rstrip())
+            print_progress_function("".join(cp.stderr.readlines()))
         else:
             java_call = java_call + ['-log', 'file', 'log.txt']
             cp = subprocess.Popen(java_call)
@@ -82,7 +82,7 @@ def calculate_flux_modes(st : numpy.array, reversible, reaction_names=None, meta
                     time.sleep(1.0)
                     ln= log_file.readlines()
                     if len(ln) > 0:
-                        print("".join(ln), end='')
+                        print_progress_function("".join(ln).rstrip())
                     if abort_callback():
                         cp.kill()
                         time.sleep(1.0) # allow some time for EFMtool to die properly so that work_dir can be cleanly deleted
@@ -90,7 +90,6 @@ def calculate_flux_modes(st : numpy.array, reversible, reaction_names=None, meta
         success = cp.poll() == 0
     except:
         success = False
-    
     os.chdir(curr_dir)
     if success:
         if return_work_dir_only:
@@ -99,7 +98,7 @@ def calculate_flux_modes(st : numpy.array, reversible, reaction_names=None, meta
         # efms = read_efms_from_mat(work_dir)
             return read_efms_from_bin(os.path.join(work_dir.name, 'efms.bin'))
     else:
-        print("EFMtool failure")
+        print_progress_function("EFMtool failure")
         return None
 
 def write_efmtool_input(st, reversible, reaction_names, metabolite_names):
