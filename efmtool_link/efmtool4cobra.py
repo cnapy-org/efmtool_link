@@ -228,7 +228,7 @@ def sympyRat2jBigIntegerPair(val):
 
 def remove_conservation_relations_sympy(model, return_reduced_only=False):
     # does not modify the model, only returns the reduced stoichiometric matrix
-    stoich_mat = cobra.util.array.create_stoichiometric_matrix(model, array_type='dok', dtype=numpy.object)
+    stoich_mat = cobra.util.array.create_stoichiometric_matrix(model, array_type='dok', dtype=object)
     # stoich_matT = DefaultBigIntegerRationalMatrix(stoich_mat.shape[1], stoich_mat.shape[0]) # transposition
     # for (r, c), v in stoich_mat.items():
     #     if type(v) is not sympy.Rational:
@@ -272,7 +272,7 @@ def sympyRatMat2jRatMat(mat):
 def jRatMat2sympyRatMat(jmat):
     num_rows = jmat.getRowCount()
     num_cols = jmat.getColumnCount()
-    mat = scipy.sparse.dok_matrix((num_rows, num_cols), dtype=numpy.object)
+    mat = scipy.sparse.dok_matrix((num_rows, num_cols), dtype=object)
     for r in range(num_rows):
         for c in range(num_cols):
             n = jmat.getBigIntegerNumeratorAt(r, c)
@@ -294,7 +294,7 @@ def dokRatMat2lilFloatMat(mat):
     return fmat
 
 def get_reversibility(model):
-    reversible = numpy.ones(len(model.reactions), dtype=numpy.int)
+    reversible = numpy.ones(len(model.reactions), dtype=numpy.int32)
     irrev_backwards_idx = []
     for i in range(len(model.reactions)):
         if not model.reactions[i].reversibility:
