@@ -11,7 +11,7 @@ import ch.javasoft.math.BigFraction as BigFraction
 import ch.javasoft.smx.ops.Gauss as Gauss
 import java.util.HashSet
 from cobra.core.configuration import Configuration
-import time
+#import time
 
 # %% make a compressed model 
 # subT can be used for conversion between its result and the full model
@@ -195,8 +195,8 @@ def jBigIntegerPair2sympyRat(numer, denom):
     return sympy.Rational(numer, denom)
 
 # def sympyRat2jBigFraction(val):
-#     numer = val.numerator()
-#     denom = val.denominator()
+#     numer = val.p
+#     denom = val.q
 #     if numer.bit_length() <= 63 and denom.bit_lenth() <= 63:
 #         return BigFraction(numer, denom)
 # ...
@@ -214,12 +214,12 @@ def jBigInteger2int(val):
         return int(val.toString())
 
 def sympyRat2jBigIntegerPair(val):
-    numer = val.numerator()
+    numer = val.p # numerator
     if numer.bit_length() <= 63:
         numer = BigInteger.valueOf(numer)
     else:
         numer = BigInteger(str(numer))
-    denom = val.denominator()
+    denom = val.q # denominator
     if denom.bit_length() <= 63:
         denom = BigInteger.valueOf(denom)
     else:
