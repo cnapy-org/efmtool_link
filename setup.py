@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name='efmtool_link',
-      version='0.0.3',
+      version='0.0.4',
       description='Exposes various efmtool functionality in Python.',
       url='https://github.com/cnapy-org/efmtool_link.git',
       author='Axel von Kamp',
