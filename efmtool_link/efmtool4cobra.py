@@ -1,7 +1,7 @@
 import efmtool_link.efmtool_intern as efmtool_intern
 import numpy
 import cobra
-import sympy
+import sympy # using fractions instead of sympy appears not to make a performance difference
 import scipy.sparse
 import jpype
 import ch.javasoft.smx.impl.DefaultBigIntegerRationalMatrix as DefaultBigIntegerRationalMatrix
@@ -69,7 +69,8 @@ def remove_conservation_relations(model, return_reduced_only=False, tolerance=0)
             model.metabolites.get_by_id(m).remove_from_model()
         return basic_metabolites
 
-def compress_model_sympy(model, remove_rxns=None, rational_conversion='base10', remove_gene_reaction_rules=True):
+def compress_model_sympy(model:cobra.Model, remove_rxns=None, protected_reactions=None,
+                         rational_conversion='base10', remove_gene_reaction_rules=True):
     # modifies the model that is passed as first parameter; if you want to preserve the original model copy it first
     # removes reactions with bounds (0, 0)
     # all irreversible reactions in the compressed model will flow in the forward direction
@@ -81,6 +82,22 @@ def compress_model_sympy(model, remove_rxns=None, rational_conversion='base10', 
             r.gene_reaction_rule = ''
     if remove_rxns is None:
         remove_rxns = []
+    # keep reactions from being merged into a subset by making temporary copies of them
+    # could also handle this at the matrix level for better performance
+    if protected_reactions is not None:
+        print(protected_reactions)
+        reaction_copies = []
+        for r in model.reactions.get_by_any(list(protected_reactions)):
+            rc: cobra.Reaction = r.copy()
+            count: int = 0
+            while True: # create a unique ID for the copy
+                rc.id = r.id + str(count)
+                if rc.id not in model.reactions:
+                    print(rc.id)
+                    break
+                count += 1
+            reaction_copies.append(rc)
+        model.add_reactions(reaction_copies) # these will be at the end of model.reactions
     config = Configuration()
     num_met = len(model.metabolites)
     num_reac = len(model.reactions)
@@ -106,7 +123,6 @@ def compress_model_sympy(model, remove_rxns=None, rational_conversion='base10', 
                     v = sympy.Rational(v) # for simplicity and actually slighlty faster (?)
                 else:
                     v = sympy.nsimplify(v, rational=True, rational_conversion=rational_conversion)
-                    # v = sympy.Rational(v)
                 model.reactions[i]._metabolites[k] = v # only changes coefficient in the model, not in the solver
             elif type(v) is not sympy.Rational:
                 raise TypeError
@@ -135,9 +151,17 @@ def compress_model_sympy(model, remove_rxns=None, rational_conversion='base10', 
     # with rationals from efmtool
     subset_matrix= efmtool_intern.jpypeArrayOfArrays2numpy_mat(comprec.post.getDoubleRows())
     del_rxns = numpy.logical_not(numpy.any(subset_matrix, axis=1)) # blocked reactions
+    if protected_reactions is not None:
+        # for r in reaction_copies:
+        #     del_rxns[model.reactions.index(r.id)] = True
+        num_reac -= len(reaction_copies)
+        del_rxns[num_reac:] = True
     for j in range(subset_matrix.shape[1]):
         rxn_idx = subset_matrix[:, j].nonzero()[0]
-        for i in range(len(rxn_idx)): # rescale all reactions in this subset
+        rxn_idx = rxn_idx[rxn_idx < num_reac] # ignore the reaction copies from protected reactions
+        if len(rxn_idx) == 0: # ignore subsets with reaction copies
+            continue
+        for i in range(len(rxn_idx)): # rescale all reactions in this subset to the calculated subset coefficients
             # !! swaps lb, ub when the scaling factor is < 0, but does not change the magnitudes
             factor = jBigFraction2sympyRat(comprec.post.getBigFractionValueAt(rxn_idx[i], j))
             # factor = jBigFraction2intORsympyRat(comprec.post.getBigFractionValueAt(rxn_idx[i], j)) # does not appear to make a speed difference
@@ -161,10 +185,12 @@ def compress_model_sympy(model, remove_rxns=None, rational_conversion='base10', 
     del_rxns = numpy.where(del_rxns)[0]
     for i in range(len(del_rxns)-1, -1, -1): # delete in reversed index order to keep indices valid
         model.reactions[del_rxns[i]].remove_from_model(remove_orphans=True)
+    # would model.remove_reactions(model.reactions.get_by_any(del_rxns)) work here?
     subT = numpy.zeros((num_reac, len(model.reactions)))
     for j in range(subT.shape[1]):
         subT[model.reactions[j].subset_rxns, j] = model.reactions[j].subset_stoich
     for i in flipped: # adapt so that it matches the reaction direction before flipping
+        if i < num_reac: # ignore reactions copies
             subT[i, :] *= -1
     # adapt compressed_model name
     return subT
