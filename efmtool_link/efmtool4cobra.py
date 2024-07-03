@@ -69,7 +69,7 @@ def remove_conservation_relations(model, return_reduced_only=False, tolerance=0)
             model.metabolites.get_by_id(m).remove_from_model()
         return basic_metabolites
 
-def compress_model_sympy(model:cobra.Model, remove_rxns=None, protected_reactions=None,
+def compress_model_sympy(model: cobra.Model, remove_rxns=None, protected_reactions=None,
                          rational_conversion='base10', remove_gene_reaction_rules=True):
     # modifies the model that is passed as first parameter; if you want to preserve the original model copy it first
     # removes reactions with bounds (0, 0)
@@ -84,43 +84,35 @@ def compress_model_sympy(model:cobra.Model, remove_rxns=None, protected_reaction
         remove_rxns = []
     # keep reactions from being merged into a subset by making temporary copies of them
     # could also handle this at the matrix level for better performance
+    num_reac: int = len(model.reactions)
+    reaction_copies = dict()
     if protected_reactions is not None:
-        print(protected_reactions)
-        reaction_copies = []
-        for r in model.reactions.get_by_any(list(protected_reactions)):
-            rc: cobra.Reaction = r.copy()
-            count: int = 0
-            while True: # create a unique ID for the copy
-                rc.id = r.id + str(count)
-                if rc.id not in model.reactions:
-                    print(rc.id)
-                    break
-                count += 1
-            reaction_copies.append(rc)
-        model.add_reactions(reaction_copies) # these will be at the end of model.reactions
+        num_protected: int = len(protected_reactions)
+        for r in protected_reactions:
+            if isinstance(r, str):
+                r = model.reactions.index(r)
+            reaction_copies[r] = num_reac
+            num_reac += 1
+    else:
+        num_protected: int = 0
     config = Configuration()
     num_met = len(model.metabolites)
-    num_reac = len(model.reactions)
     stoich_mat = DefaultBigIntegerRationalMatrix(num_met, num_reac)
-    # reversible = jpype.JBoolean[num_reac]
-    reversible = jpype.JBoolean[:]([r.reversibility for r in model.reactions])
+    reversible = jpype.JBoolean[:]([r.reversibility for r in model.reactions] + [True]*num_protected)
     # start_time = time.monotonic()
     flipped = []
-    for i in range(num_reac):
+    for i in range(num_reac - num_protected):
         if model.reactions[i].bounds == (0, 0): # blocked reaction
             remove_rxns.append(model.reactions[i].id)
         elif model.reactions[i].upper_bound <= 0: # can run in backwards direction only (is and stays classified as irreversible)
             model.reactions[i] *= -1
             flipped.append(i)
-            print("Flipped", model.reactions[i].id)
+        copy_colum_idx = reaction_copies.get(i, -1)
         # have to use _metabolites because metabolites gives only a copy
         for k, v in model.reactions[i]._metabolites.items():
             if type(v) is float or type(v) is int:
                 if type(v) is int or v.is_integer():
-                    # v = int(v)
-                    # n = int2jBigInteger(v)
-                    # d = BigInteger.ONE
-                    v = sympy.Rational(v) # for simplicity and actually slighlty faster (?)
+                    v = sympy.Rational(v)
                 else:
                     v = sympy.nsimplify(v, rational=True, rational_conversion=rational_conversion)
                 model.reactions[i]._metabolites[k] = v # only changes coefficient in the model, not in the solver
@@ -130,7 +122,10 @@ def compress_model_sympy(model:cobra.Model, remove_rxns=None, protected_reaction
             # does not work although there is a public void setValueAt(int row, int col, BigInteger numerator, BigInteger denominator) method
             # leads to kernel crash directly or later
             # stoic_mat.setValueAt(compr_model.metabolites.index(k.id), i, n, d)
-            stoich_mat.setValueAt(model.metabolites.index(k.id), i, BigFraction(n, d))
+            met_idx = model.metabolites.index(k.id)
+            stoich_mat.setValueAt(met_idx, i, BigFraction(n, d))
+            if copy_colum_idx > 0:
+                stoich_mat.setValueAt(met_idx, copy_colum_idx, BigFraction(n, d))
             # reversible[i] = compr_model.reactions[i].reversibility # somehow makes problems with the smc.compress call
     
     smc = StoichMatrixCompressor(efmtool_intern.subset_compression)
@@ -138,7 +133,7 @@ def compress_model_sympy(model:cobra.Model, remove_rxns=None, protected_reaction
         reacNames = jpype.JString[num_reac]
         remove_rxns = None
     else:
-        reacNames = jpype.JString[:](model.reactions.list_attr('id'))
+        reacNames = jpype.JString[:](model.reactions.list_attr('id') + ['']*num_protected)
         remove_rxns = java.util.HashSet(remove_rxns) # works because of some jpype magic
         print("Removing", remove_rxns.size(), "reactions:")
         print(remove_rxns.toString())
@@ -150,12 +145,9 @@ def compress_model_sympy(model:cobra.Model, remove_rxns=None, protected_reaction
     # would be faster to do the computations with floats and afterwards substitute the coefficients
     # with rationals from efmtool
     subset_matrix= efmtool_intern.jpypeArrayOfArrays2numpy_mat(comprec.post.getDoubleRows())
+    num_reac -= num_protected
     del_rxns = numpy.logical_not(numpy.any(subset_matrix, axis=1)) # blocked reactions
-    if protected_reactions is not None:
-        # for r in reaction_copies:
-        #     del_rxns[model.reactions.index(r.id)] = True
-        num_reac -= len(reaction_copies)
-        del_rxns[num_reac:] = True
+    del_rxns = del_rxns[:num_reac]
     for j in range(subset_matrix.shape[1]):
         rxn_idx = subset_matrix[:, j].nonzero()[0]
         rxn_idx = rxn_idx[rxn_idx < num_reac] # ignore the reaction copies from protected reactions
