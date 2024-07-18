@@ -1,12 +1,11 @@
 import numpy
 import jpype
-import scipy
-# import sys
 import os
 
 efmtool_jar = os.path.join(os.path.dirname(__file__), 'lib', 'metabolic-efm-all.jar')
 jpype.addClassPath(efmtool_jar)
-jpype.startJVM()
+if not jpype.isJVMStarted():
+    jpype.startJVM() # necessary to use import with Java classes
 
 import jpype.imports
 import ch.javasoft.smx.impl.DefaultBigIntegerRationalMatrix as DefaultBigIntegerRationalMatrix

@@ -244,29 +244,23 @@ def sympyRat2jBigIntegerPair(val):
         denom = BigInteger(str(denom))
     return (numer, denom)
 
-def remove_conservation_relations_sympy(model, return_reduced_only=False):
-    # does not modify the model, only returns the reduced stoichiometric matrix
-    stoich_mat = cobra.util.array.create_stoichiometric_matrix(model, array_type='dok', dtype=object)
-    # stoich_matT = DefaultBigIntegerRationalMatrix(stoich_mat.shape[1], stoich_mat.shape[0]) # transposition
-    # for (r, c), v in stoich_mat.items():
-    #     if type(v) is not sympy.Rational:
-    #         TypeError('Expected rational numbers as coefficients')
-    #     n, d = sympyRat2jBigIntegerPair(v)
-    #     stoich_matT.setValueAt(c, r, BigFraction(n, d)) # transposition
-    stoich_matT = sympyRatMat2jRatMatTransposed(stoich_mat)
+def remove_conservation_relations_sympy(model: cobra.Model, return_reduced_only=False):
+    # return_reduced_only: does not modify the model, only returns the reduced stoichiometric matrix
+    stoich_mat = get_jRatMat_stoichmat(model)
+    stoich_matT = stoich_mat.transpose()
     row_map = jpype.JInt[stoich_matT.getRowCount()] # just a placeholder because we don't care about the row permutation here
     col_map = jpype.JInt[:](range(stoich_matT.getColumnCount()))
     rank = Gauss.getRationalInstance().rowEchelon(stoich_matT, False, row_map, col_map)
     basic_metabolites = col_map[0:rank]
     if return_reduced_only:
+        stoich_mat = jRatMat2sparseFloat(stoich_mat)
         reduced = stoich_mat[basic_metabolites, :]
         return reduced, basic_metabolites, stoich_matT
     else:
-        dependent_metabolites = [model.metabolites[i].id for i in set(range(len(model.metabolites))) - set(basic_metabolites)]
+        dependent_metabolites = [model.metabolites[i] for i in set(range(len(model.metabolites))) - set(basic_metabolites)]
         print("The following metabolites have been removed from the model:")
-        print(dependent_metabolites)
-        for m in dependent_metabolites:
-            model.metabolites.get_by_id(m).remove_from_model()
+        print(", ".join(m.id for m in dependent_metabolites))
+        model.remove_metabolites(dependent_metabolites)
         return basic_metabolites, stoich_matT
 
 def sympyRatMat2jRatMatTransposed(mat):
@@ -320,3 +314,26 @@ def get_reversibility(model):
             if model.reactions[i].upper_bound <= 0: # can run in backwards direction only
                 irrev_backwards_idx.append(i)
     return reversible, irrev_backwards_idx
+
+def get_jRatMat_stoichmat(model: cobra.Model) -> DefaultBigIntegerRationalMatrix:
+        jmat = DefaultBigIntegerRationalMatrix(len(model.metabolites), len(model.reactions))
+        for i in range(len(model.reactions)):
+            r = model.reactions[i]
+            for m,c in r.metabolites.items():
+                n, d = sympyRat2jBigIntegerPair(c)
+                jmat.setValueAt(model.metabolites.index(m.id), i, BigFraction(n, d))
+        return jmat
+
+def kernel(jmat: DefaultBigIntegerRationalMatrix) -> DefaultBigIntegerRationalMatrix:
+    gauss_rat = Gauss.getRationalInstance()
+    return gauss_rat.nullspace(jmat)
+
+def jRatMat2sparseFloat(jmat: DefaultBigIntegerRationalMatrix) -> scipy.sparse:
+    rows: int = jmat.getRowCount()
+    cols: int = jmat.getColumnCount()
+    res = scipy.sparse.lil_matrix((rows, cols), dtype=float)
+    for i in range(rows):
+        for j in range(cols):
+            if not jmat.getBigIntegerNumeratorAt(i, j).equals(BigInteger.ZERO):
+                res[i, j] = jmat.getDoubleValueAt(i, j)
+    return res
