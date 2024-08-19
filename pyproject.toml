@@ -1,0 +1,19 @@
+[project]
+name = "efmtool_link"
+version = "0.0.7"
+authors = [
+  { name="Axel von Kamp", email="vonkamp@mpi-magdeburg.mpg.de" },
+]
+description = "Exposes various efmtool functionality in Python."
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache License 2.0",
+    "Operating System :: OS Independent",
+]
+dependencies = ["jpype1", "numpy", "scipy", "cobra", "psutil"]
+
+[project.urls]
+Homepage = "https://github.com/cnapy-org/efmtool_link"
+Issues = "https://github.com/cnapy-org/efmtool_link/issues"
