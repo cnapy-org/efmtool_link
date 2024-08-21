@@ -1,6 +1,6 @@
 [project]
 name = "efmtool_link"
-version = "0.0.7"
+version = "0.0.7.1"
 authors = [
   { name="Axel von Kamp", email="vonkamp@mpi-magdeburg.mpg.de" },
 ]
@@ -12,8 +12,12 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ]
-dependencies = ["jpype1", "numpy", "scipy", "cobra", "psutil"]
+dependencies = ["jpype1", "numpy==1.23", "scipy==1.12", "cobra>=0.29", "psutil", "install-jdk>=1.1"]
 
 [project.urls]
 Homepage = "https://github.com/cnapy-org/efmtool_link"
 Issues = "https://github.com/cnapy-org/efmtool_link/issues"
+
+# use install-jdk 1.1.0?
+# Java 11 should be OK
+# installation location?  jdk.install('11', jre=True, path=os.path.join(site.PREFIXES[0], 'jre')) -> creates directory if necessary and returns installation path
