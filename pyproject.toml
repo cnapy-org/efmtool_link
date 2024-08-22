@@ -6,18 +6,18 @@ authors = [
 ]
 description = "Exposes various efmtool functionality in Python."
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.9"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ]
-dependencies = ["jpype1", "numpy==1.23", "scipy==1.12", "cobra>=0.29", "psutil", "install-jdk>=1.1"]
+dependencies = ["jpype1", "numpy==1.23.*", "scipy==1.12.*", "cobra>=0.29", "psutil", "install-jdk>=1.1"]
+
+[build-system]
+requires = ["setuptools", "install-jdk>=1.1", "jpype1"]
+build-backend = "setuptools.build_meta"
 
 [project.urls]
 Homepage = "https://github.com/cnapy-org/efmtool_link"
 Issues = "https://github.com/cnapy-org/efmtool_link/issues"
-
-# use install-jdk 1.1.0?
-# Java 11 should be OK
-# installation location?  jdk.install('11', jre=True, path=os.path.join(site.PREFIXES[0], 'jre')) -> creates directory if necessary and returns installation path
