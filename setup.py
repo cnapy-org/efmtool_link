@@ -9,6 +9,7 @@ class PostInstallCommand(install):
     """Install a JRE if necessary."""
     
     def run(self):
+        install.run(self)
         print("start PostInstallCommand run")
         try:
             getDefaultJVMPath()
