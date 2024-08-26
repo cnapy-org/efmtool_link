@@ -10,7 +10,6 @@ class PostInstallCommand(install):
     
     def run(self):
         install.run(self)
-        print("start PostInstallCommand run")
         try:
             getDefaultJVMPath()
         except (JVMNotFoundException, JVMNotSupportedException):
@@ -36,7 +35,6 @@ class PostInstallCommand(install):
                     break
             if not has_jre: # very unlikely
                 print("Could not install a Java Runtime Environtment, you need to install one yourself.")
-        print("end PostInstallCommand run")
 
 setup(name='efmtool_link',
       packages=['efmtool_link', 'efmtool_link.lib'],
