@@ -1,10 +1,27 @@
 import numpy
 import jpype
+from jpype._jvmfinder import getDefaultJVMPath, JVMNotFoundException, JVMNotSupportedException
+import site
 import os
 
 efmtool_jar = os.path.join(os.path.dirname(__file__), 'lib', 'metabolic-efm-all.jar')
 jpype.addClassPath(efmtool_jar)
 if not jpype.isJVMStarted():
+    try:
+        getDefaultJVMPath()
+    except (JVMNotFoundException, JVMNotSupportedException):
+        paths = site.getsitepackages()
+        paths.append(site.getusersitepackages())
+        for path in paths:
+            path = os.path.join(path, 'jre')
+            if os.path.exists(path):
+                os.environ['JAVA_HOME'] = path
+                try:
+                    getDefaultJVMPath()
+                except (JVMNotFoundException, JVMNotSupportedException):
+                    pass
+                else:
+                    break
     jpype.startJVM() # necessary to use import with Java classes
 
 import jpype.imports

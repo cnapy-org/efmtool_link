@@ -31,7 +31,7 @@ class PostInstallCommand(install):
                             has_jre = True
                             break
                     print("Installing Java Runtime Environtment in:")
-                    print(jdk.install('11', jre=True, path=os.path.join(path, 'jre')))
+                    print(jdk.install('11', jre=True, path=path))
                     has_jre = True
                     break
             if not has_jre: # very unlikely
