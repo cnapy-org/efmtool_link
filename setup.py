@@ -1,4 +1,4 @@
-from setuptools import setup, find_packages
+from setuptools import setup
 import site
 import os
 from jpype._jvmfinder import getDefaultJVMPath, JVMNotFoundException, JVMNotSupportedException
@@ -38,7 +38,7 @@ class PostInstallCommand(install):
         print("end PostInstallCommand run")
 
 setup(name='efmtool_link',
-      packages=find_packages(),
+      packages=['efmtool_link', 'efmtool_link.lib'],
       package_dir={'efmtool_link': 'efmtool_link'},
       package_data={'efmtool_link': ['lib/*.jar']},
       cmdclass={
