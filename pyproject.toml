@@ -1,18 +1,18 @@
 [project]
 name = "efmtool_link"
-version = "0.0.7.1"
+version = "0.0.7.2"
 authors = [
   { name="Axel von Kamp", email="vonkamp@mpi-magdeburg.mpg.de" },
 ]
 description = "Exposes various efmtool functionality in Python."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ]
-dependencies = ["jpype1", "numpy==1.23.*", "scipy==1.12.*", "cobra>=0.29", "psutil", "install-jdk>=1.1"]
+dependencies = ["jpype1", "numpy", "scipy", "cobra>=0.26.3", "psutil", "install-jdk>=1.1"]
 
 [build-system]
 requires = ["setuptools", "install-jdk>=1.1", "jpype1"]
