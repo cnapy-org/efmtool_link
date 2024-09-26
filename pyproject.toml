@@ -1,6 +1,6 @@
 [project]
 name = "efmtool_link"
-version = "0.0.7.5"
+version = "0.0.8"
 authors = [
   { name="Axel von Kamp", email="vonkamp@mpi-magdeburg.mpg.de" },
 ]
@@ -12,7 +12,7 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ]
-dependencies = ["jpype1", "numpy", "scipy", "cobra>=0.26.3", "psutil", "install-jdk>=1.1"]
+dependencies = ["jpype1", "numpy", "scipy", "cobra>=0.26.3", "psutil"]
 
 [build-system]
 requires = ["setuptools", "install-jdk>=1.1", "jpype1"]

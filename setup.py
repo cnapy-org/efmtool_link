@@ -40,6 +40,7 @@ setup(name='efmtool_link',
       packages=['efmtool_link', 'efmtool_link.lib'],
       package_dir={'efmtool_link': 'efmtool_link'},
       package_data={'efmtool_link': ['lib/*.jar']},
+      install_requires=['install-jdk>=1.1', 'jpype1'],
       cmdclass={
           'install': PostInstallCommand,
       },
