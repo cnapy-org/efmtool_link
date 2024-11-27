@@ -12,7 +12,7 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ]
-dependencies = ["jpype1", "numpy", "scipy", "cobra>=0.26.3", "psutil"]
+dependencies = ["jpype1==1.5.0", "numpy", "scipy", "cobra>=0.26.3", "psutil"]
 
 [build-system]
 requires = ["setuptools", "install-jdk>=1.1", "jpype1"]

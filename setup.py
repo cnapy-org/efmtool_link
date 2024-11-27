@@ -7,7 +7,7 @@ import jdk
 
 class PostInstallCommand(install):
     """Install a JRE if necessary."""
-    
+
     def run(self):
         install.run(self)
         try:
@@ -40,7 +40,7 @@ setup(name='efmtool_link',
       packages=['efmtool_link', 'efmtool_link.lib'],
       package_dir={'efmtool_link': 'efmtool_link'},
       package_data={'efmtool_link': ['lib/*.jar']},
-      install_requires=['install-jdk>=1.1', 'jpype1'],
+      install_requires=['install-jdk>=1.1', 'jpype1==1.5.0'],
       cmdclass={
           'install': PostInstallCommand,
       },
